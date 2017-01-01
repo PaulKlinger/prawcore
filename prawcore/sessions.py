@@ -10,7 +10,7 @@ from requests.status_codes import codes
 from .auth import BaseAuthorizer
 from .rate_limit import RateLimiter
 from .exceptions import (BadRequest, InvalidInvocation, NotFound, Redirect,
-                         ServerError)
+                         ServerError, RequestException)
 from .util import authorization_error_class
 
 log = logging.getLogger(__package__)
@@ -74,9 +74,13 @@ class Session(object):
                 params=params)
             log.debug('Response: {} ({} bytes)'.format(
                 response.status_code, response.headers.get('content-length')))
-        except ChunkedEncodingError:
-            response = None
-            log.exception('Response')
+        except RequestException as exception:
+            if (retries > 1 and isinstance(exception.original_exception,
+                                           ChunkedEncodingError)):
+                response = None
+                log.exception('Response')
+            else:
+                raise exception
 
         if retries > 1 and (response is None or
                             response.status_code in self.RETRY_STATUSES):
